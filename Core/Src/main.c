@@ -18,9 +18,11 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
+#include <main.h>
+#include <RingBuffer.h>
 #include "cmsis_os.h"
 #include "usart.h"
+#include <stdio.h>
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -91,14 +93,14 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart2, &Received, 5);
+  HAL_UART_Receive_IT(&huart2, (uint8_t*)Received, 5);
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
-  //MX_FREERTOS_Init();
-  //xTaskCreate( vLEDTask, "LEDTask", 100, NULL, 1, NULL );
+  MX_FREERTOS_Init();
+  xTaskCreate( vLEDTask, "LEDTask", 100, NULL, 1, NULL );
   /* Start scheduler */
-  //osKernelStart();
+  osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
@@ -168,9 +170,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
 	uint8_t Data[40]; // Tablica przechowujaca wysylana wiadomosc.
 
-	sprintf(Data, "Odebrana wiadomosc: %s [dupsko] \n\r", (char*)Received);
+	sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", (char*)Received);
 	HAL_UART_Transmit(&huart2, Data, 40, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
-	HAL_UART_Receive_IT(&huart2, Received, 5); // Ponowne włączenie nasłuchiwania
+	HAL_UART_Receive_IT(&huart2, (uint8_t*)Received, 5); // Ponowne włączenie nasłuchiwania
 };
 
 void vLEDTask(void *pvParameters) {
