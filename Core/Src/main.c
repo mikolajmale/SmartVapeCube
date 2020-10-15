@@ -169,10 +169,18 @@ void SystemClock_Config(void)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
 	uint8_t Data[100] = {0}; // Tablica przechowujaca wysylana wiadomosc.
+	uint8_t cmd[20] = {0};
 
-	add(Received);
-	sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", uart_circ_buff.buffer);
-	HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
+	rng_buf_add(Received);
+	if(Received == 13){
+		rng_buf_get_buff(cmd);
+		sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", cmd);
+		HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
+	}
+
+//	sprintf((char*)Data, "Odebrana wiadomosc: %d \n\r", Received);
+//	HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
+
 	HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1); // Ponowne włączenie nasłuchiwania
 };
 
