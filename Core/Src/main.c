@@ -178,9 +178,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 		HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
 	}
 
-//	sprintf((char*)Data, "Odebrana wiadomosc: %d \n\r", Received);
-//	HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
-
 	HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1); // Ponowne włączenie nasłuchiwania
 };
 
