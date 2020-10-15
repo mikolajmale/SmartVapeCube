@@ -16,9 +16,10 @@ typedef struct {
 	uint8_t tail;
 } circ_buffer_t;
 
+extern volatile circ_buffer_t uart_circ_buff;
 
-uint8_t add(char *byte);
-uint8_t get(char *byte);
+uint8_t add(char byte);
+uint8_t get(char byte);
 
 
 #endif /* SRC_RINGBUFFER_H_ */

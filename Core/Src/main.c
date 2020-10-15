@@ -47,7 +47,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-volatile uint8_t Received[5];
+volatile uint8_t Received;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -93,7 +93,7 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart2, (uint8_t*)Received, 5);
+  HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1);
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
@@ -168,11 +168,12 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
-	uint8_t Data[40]; // Tablica przechowujaca wysylana wiadomosc.
+	uint8_t Data[100] = {0}; // Tablica przechowujaca wysylana wiadomosc.
 
-	sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", (char*)Received);
-	HAL_UART_Transmit(&huart2, Data, 40, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
-	HAL_UART_Receive_IT(&huart2, (uint8_t*)Received, 5); // Ponowne włączenie nasłuchiwania
+	add(Received);
+	sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", uart_circ_buff.buffer);
+	HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
+	HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1); // Ponowne włączenie nasłuchiwania
 };
 
 void vLEDTask(void *pvParameters) {
