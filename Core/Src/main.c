@@ -99,9 +99,7 @@ int main(void)
   HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1);
   HAL_UART_Receive_IT(&huart3, (uint8_t*)&ReceivedHC06, 1);
 
-  char data[25] = {0};
-  sprintf((char*)data, "HC06 setup: %d \n\r", HC06_Test());
-  HAL_UART_Transmit(&huart2, &data, 25, 100);
+  HC06_Init(&huart2);
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
@@ -200,6 +198,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 		} else {
 			HC06_rx_counter++;
 		}
+		HAL_UART_Receive_IT(&huart3, (uint8_t*)&ReceivedHC06, 1);
 	}
 
 };

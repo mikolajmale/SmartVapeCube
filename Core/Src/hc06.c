@@ -1,38 +1,20 @@
-/*#############################################################
-Driver name	    : hc06.c
-Author 			: Grant Phillips
-Date Modified   : 25/09/2014
-Compiler        : Keil ARM-MDK (uVision V4.70.0.0)
-Tested On       : STM32F4-Discovery
-
-Description			: Provides a library to access the USART module
-					  on the STM32F4-Discovery to establish serial
-					  communication with a remote device (e.g. PC)
-					  using the HC-06 Bluetooth module.
-
-Requirements    : * STM32F4-Discovery Board
-				  * HC-06 Bluetooth module
-
-Functions		: HC06_Init
-				  HC06_PutChar
-				  HC06_PutStr
-				  HC06_ClearRxBuffer
-				  HC06_Test
-				  HC06_SetBaud
-				  HC06_SetName
-				  HC06_SetPin
-
-Special Note(s) : In this driver PC6 is used as USART_TX and
-					PC7 as USART_RX. Any other UART and pins can
-					be used, just change the relevant GPIO config-
-					urations and occurrences of USART to the new
-					UART/USART number.
-##############################################################*/
-
 #include <string.h>
 #include "hc06.h"
 
 extern UART_HandleTypeDef huart3;
+
+errordesc_t errordesc[] = {
+    { E_SUCCESS, "No error" },
+    { E_RESPONSE_TIMEOUT, "No response" },
+    { E_UNKNOWN_RESPONSE, "Unknown response" }
+};
+
+void print_err_msg(UART_HandleTypeDef *huart, error_t err, char *custom_msg){
+	char msg[30];
+	sprintf(msg, "HC06 (%s) : %s \n\r", custom_msg, errordesc[err].message);
+	HAL_UART_Transmit(huart, msg, strlen(msg), 100);
+};
+
 
 volatile char HC06_rx_buffer[HC06_RX_BUFFER_LENGTH];	//used by the IRQ handler
 volatile uint8_t HC06_rx_counter = 0; //used by the IRQ handler
@@ -52,12 +34,12 @@ Special Note(s) : NONE
 Parameters		: speed	- 32-bit value to set the baud rate
 Return value	: NONE
 *********************************************************************************************/
-void HC06_Init()
+void HC06_Init(UART_HandleTypeDef *huart)
 {
-	/* Flush USART Tx Buffer */
-	HC06_PutStr("\n\r");
-	HC06_ClearRxBuffer();
-	HAL_Delay(1000);
+	char msg[20] = "HC06: started init\n\r";
+	HAL_UART_Transmit(huart, msg, strlen(msg), 100);
+	//error_t response = HC06_Test();
+	print_err_msg(huart, HC06_Test(), "test");
 }
 
 
@@ -75,10 +57,11 @@ Parameters		: byte -	character to print
 
 Return value	: NONE
 *********************************************************************************************/
-void HC06_PutChar(char *byte)
+error_t HC06_PutChar(char *byte)
 {
 	/* Put character on the serial line */
-	HAL_UART_Transmit(&huart3, byte, 1, 1000);
+	if(HAL_UART_Transmit(&huart3, byte, 1, 1000) != HAL_OK) return E_RESPONSE_TIMEOUT;
+	return E_SUCCESS;
 }
 
 /*********************************************************************************************
@@ -95,10 +78,14 @@ Parameters		: str - string (char array) to print
 
 Return value	: NONE
 *********************************************************************************************/
-void HC06_PutStr(char *str)
+error_t HC06_PutStr(char *str)
 {
-	for(int i = 0; str[i] != '\0'; i++)
-		HC06_PutChar(&str[i]);
+	for(int i = 0; str[i] != '\0'; i++){
+		if(HC06_PutChar(&str[i]) == E_RESPONSE_TIMEOUT){
+			return E_RESPONSE_TIMEOUT;
+		}
+	}
+	return E_SUCCESS;
 }
 
 /*********************************************************************************************
@@ -123,38 +110,29 @@ void HC06_ClearRxBuffer(void)
 }
 
 /*********************************************************************************************
-Function name   : HC06_Test
-Author 			: Grant Phillips
-Date Modified   : 06/08/2013
-Compiler        : Keil ARM-MDK (uVision V4.70.0.0)
-
 Description		: Tests if there is communications with the HC-06.
 
 Special Note(s) : NONE
 
 Parameters		: NONE
-
-Return value	: 0		-		Success
-				  1		-		Timeout error; not enough characters received for "OK" message
-				  2		-		enough characters received, but incorrect message
 *********************************************************************************************/
-uint8_t HC06_Test(void)
+error_t HC06_Test(void)
 {
 	uint8_t tries = 10;
-	char str[2] = "AT";
+	char at_command[2] = "AT";
 
 	HC06_ClearRxBuffer(); //clear rx buffer
-	HC06_PutStr(str); //AT command for TEST COMMUNICATIONS
+	HC06_PutStr(at_command);
 	while(HC06_rx_counter < 2) //wait for "OK" - i.e. waiting for 2 characters
 	{
 		tries--;
 		HAL_Delay(100);
-		if (tries == 0) return 0x00; //if the timeout delay is exeeded, exit with error code
+		if (tries == 0) return E_RESPONSE_TIMEOUT;
 	}
 	if(strcmp(HC06_rx_buffer, "OK") == 0)
-		return 0x01; //success
+		return E_SUCCESS; //success
 	else
-		return 0x02; //unknown return AT msg from HC06
+		return E_UNKNOWN_RESPONSE;
 }
 
 /*********************************************************************************************
