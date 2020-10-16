@@ -18,16 +18,15 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <main.h>
-#include <RingBuffer.h>
+#include "main.h"
 #include "cmsis_os.h"
 #include "usart.h"
-#include <stdio.h>
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "RingBuffer.h"
+#include "hc06.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,6 +47,7 @@
 
 /* USER CODE BEGIN PV */
 volatile uint8_t Received;
+volatile uint8_t ReceivedHC06;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,13 +92,20 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+  xTaskCreate( vLEDTask, "LEDTask", 100, NULL, 1, NULL );
+  HAL_GPIO_WritePin(B_LED_GPIO_Port, B_LED_Pin, GPIO_PIN_SET);
   HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1);
+  HAL_UART_Receive_IT(&huart3, (uint8_t*)&ReceivedHC06, 1);
+
+  char data[25] = {0};
+  sprintf((char*)data, "HC06 setup: %d \n\r", HC06_Test());
+  HAL_UART_Transmit(&huart2, &data, 25, 100);
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
   MX_FREERTOS_Init();
-  xTaskCreate( vLEDTask, "LEDTask", 100, NULL, 1, NULL );
   /* Start scheduler */
   osKernelStart();
 
@@ -168,17 +175,33 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
-	uint8_t Data[100] = {0}; // Tablica przechowujaca wysylana wiadomosc.
-	uint8_t cmd[20] = {0};
+	if(huart->Instance == USART2){
+		uint8_t Data[100] = {0}; // Tablica przechowujaca wysylana wiadomosc.
+		uint8_t cmd[20] = {0};
 
-	rng_buf_add(Received);
-	if(Received == 13){
-		rng_buf_get_buff(cmd);
-		sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", cmd);
-		HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
+		rng_buf_add(Received);
+		if(Received == 13){
+			rng_buf_get_buff(cmd);
+			sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", cmd);
+			HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
+		}
+
+		HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1); // Ponowne włączenie nasłuchiwania
+	}else if(huart->Instance == USART3){
+		/* Read one byte from the receive data register */
+		HC06_rx_buffer[HC06_rx_counter] = (char)ReceivedHC06;
+
+		/* if the last character received is the LF ('\r' or 0x0a) character OR if the HC06_RX_BUFFER_LENGTH (40) value has been reached ...*/
+		if((HC06_rx_counter + 1 == HC06_RX_BUFFER_LENGTH) || (HC06_rx_buffer[HC06_rx_counter] == 0x0a)) {
+		  memcpy(HC06_msg, HC06_rx_buffer, HC06_rx_counter); //copy each character in the HC06_rx_buffer to the HC06_msg variable
+		  memset(HC06_rx_buffer, 0, HC06_RX_BUFFER_LENGTH); //clear HC06_rx_buffer
+		  HC06_rx_counter = 0;
+		  new_HC06_msg = 1;
+		} else {
+			HC06_rx_counter++;
+		}
 	}
 
-	HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1); // Ponowne włączenie nasłuchiwania
 };
 
 void vLEDTask(void *pvParameters) {
