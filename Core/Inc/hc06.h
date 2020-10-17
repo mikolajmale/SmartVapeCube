@@ -14,9 +14,9 @@
 enum _config_error
 {
     E_SUCCESS = 0,
-    E_RESPONSE_TIMEOUT = -1,
-    E_UNKNOWN_RESPONSE = -2,
-	E_INVALID_ARGS = -3,
+    E_RESPONSE_TIMEOUT = 1,
+    E_UNKNOWN_RESPONSE = 2,
+	E_INVALID_ARGS = 3,
 };
 
 /* type to provide in your API */

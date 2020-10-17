@@ -27,6 +27,8 @@
 /* USER CODE BEGIN Includes */
 #include "RingBuffer.h"
 #include "hc06.h"
+#include "queue.h"
+#include "semphr.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,8 +48,12 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+TaskHandle_t BleTaskHandle = NULL;
+TaskHandle_t CliTaskHandle = NULL;
 volatile uint8_t Received;
 volatile uint8_t ReceivedHC06;
+BaseType_t checkIfYieldRequired_BLE;
+BaseType_t checkIfYieldRequired_CLI;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,6 +61,8 @@ void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 void vLEDTask( void *pvParameters );
+void vBleSendTask( void *pvParameters );
+void vCliSendTask( void *pvParameters );
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
 
@@ -94,12 +102,22 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+
+  // Change priority to enable rtos callbacks
+  HAL_NVIC_SetPriority(USART3_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(USART2_IRQn, 5, 0);
+
+  // Creating tasks
   xTaskCreate( vLEDTask, "LEDTask", 100, NULL, 1, NULL );
+  xTaskCreate( vBleSendTask, "BleSendTask", 100, NULL, 1, &BleTaskHandle );
+  xTaskCreate( vCliSendTask, "CliSendTask", 100, NULL, 1, &CliTaskHandle );
   HAL_GPIO_WritePin(B_LED_GPIO_Port, B_LED_Pin, GPIO_PIN_SET);
+
+  // Start receiving interrupts
   HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1);
   HAL_UART_Receive_IT(&huart3, (uint8_t*)&ReceivedHC06, 1);
 
-  HC06_Init(&huart2);
+  //HC06_Init(&huart2);
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
@@ -171,33 +189,29 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
 	if(huart->Instance == USART2){
-		uint8_t Data[100] = {0}; // Tablica przechowujaca wysylana wiadomosc.
-		uint8_t cmd[20] = {0};
-
 		rng_buf_add(Received);
 		if(Received == 13){
-			rng_buf_get_buff(cmd);
-			sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", cmd);
-			HAL_UART_Transmit(&huart2, Data, 100, 1000); // Rozpoczecie nadawania danych z wykorzystaniem przerwan
+			checkIfYieldRequired_CLI = xTaskResumeFromISR(CliTaskHandle);
+			portYIELD_FROM_ISR(checkIfYieldRequired_CLI);
 		}
 
-		HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1); // Ponowne włączenie nasłuchiwania
-	}else if(huart->Instance == USART3){
-		/* Read one byte from the receive data register */
+		HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1);
+	}
+
+	else if(huart->Instance == USART3){
 		HC06_rx_buffer[HC06_rx_counter] = (char)ReceivedHC06;
 
-		/* if the last character received is the LF ('\r' or 0x0a) character OR if the HC06_RX_BUFFER_LENGTH (40) value has been reached ...*/
-		if((HC06_rx_counter + 1 == HC06_RX_BUFFER_LENGTH) || (HC06_rx_buffer[HC06_rx_counter] == 0x0a)) {
-		  memcpy(HC06_msg, HC06_rx_buffer, HC06_rx_counter); //copy each character in the HC06_rx_buffer to the HC06_msg variable
-		  memset(HC06_rx_buffer, 0, HC06_RX_BUFFER_LENGTH); //clear HC06_rx_buffer
-		  HC06_rx_counter = 0;
-		  new_HC06_msg = 1;
+		if(HC06_rx_buffer[HC06_rx_counter] == 0x0d) {
+			checkIfYieldRequired_BLE = xTaskResumeFromISR(BleTaskHandle);
+			portYIELD_FROM_ISR(checkIfYieldRequired_BLE);
 		} else {
 			HC06_rx_counter++;
 		}
+
 		HAL_UART_Receive_IT(&huart3, (uint8_t*)&ReceivedHC06, 1);
 	}
 
@@ -211,6 +225,35 @@ void vLEDTask(void *pvParameters) {
 		vTaskDelay( 100 / portTICK_RATE_MS );
 	}
 
+	vTaskDelete(NULL);
+};
+
+void vBleSendTask( void *pvParameters ){
+	while(1){
+		vTaskSuspend(NULL);
+		  memcpy(HC06_msg, HC06_rx_buffer, HC06_rx_counter);
+		  memset(HC06_rx_buffer, 0, HC06_RX_BUFFER_LENGTH);
+		  HC06_rx_counter = 0;
+
+		  char Data[20];
+		  sprintf((char*)Data, "HC06 (received): %s \n\r", HC06_msg);
+		  memset(HC06_msg, 0, HC06_RX_BUFFER_LENGTH);
+		  HAL_UART_Transmit(&huart2, Data, strlen(Data), 100);
+	}
+	vTaskDelete(NULL);
+};
+
+void vCliSendTask( void *pvParameters ){
+	uint8_t Data[50] = {0};
+	uint8_t cmd[20] = {0};
+	while(1){
+		vTaskSuspend(NULL);
+			rng_buf_get_buff(cmd);
+			sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", cmd);
+			HAL_UART_Transmit(&huart2, Data, strlen(Data), 1000);
+			memset(cmd, 0, 20);
+			memset(Data, 0, 50);
+	}
 	vTaskDelete(NULL);
 };
 /* USER CODE END 4 */

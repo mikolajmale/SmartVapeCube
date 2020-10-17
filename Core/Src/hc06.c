@@ -28,6 +28,7 @@ void HC06_Init(UART_HandleTypeDef *huart)
 	print_err_msg(huart, HC06_Test(), "test");
 	print_err_msg(huart, HC06_SetName("SmartVape"), "set_name");
 	print_err_msg(huart, HC06_SetPin("1234"), "set_pin");
+	HC06_ClearRxBuffer();
 }
 
 
@@ -170,7 +171,7 @@ error_t HC06_SetName(char *name)
 
 error_t HC06_SetPin(char *pin)
 {
-	uint32_t timeout = 10;
+	uint32_t timeout = 100;
 	char buf[20];
 
 	HC06_ClearRxBuffer(); //clear rx buffer
