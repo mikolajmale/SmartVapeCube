@@ -15,7 +15,8 @@ enum _config_error
 {
     E_SUCCESS = 0,
     E_RESPONSE_TIMEOUT = -1,
-    E_UNKNOWN_RESPONSE = -2, /* consider some way of returning the OS error too */
+    E_UNKNOWN_RESPONSE = -2,
+	E_INVALID_ARGS = -3,
 };
 
 /* type to provide in your API */
@@ -39,7 +40,7 @@ error_t HC06_PutStr(char *str);
 void HC06_ClearRxBuffer(void);
 error_t HC06_Test(void);
 uint8_t HC06_SetBaud(uint32_t speed);
-uint8_t HC06_SetName(char *name);
-uint8_t HC06_SetPin(char *pin);
+error_t HC06_SetName(char *name);
+error_t HC06_SetPin(char *pin);
 
 #endif /* INC_HC06_H_ */
