@@ -111,7 +111,6 @@ int main(void)
   xTaskCreate( vLEDTask, "LEDTask", 100, NULL, 1, NULL );
   xTaskCreate( vBleSendTask, "BleSendTask", 100, NULL, 1, &BleTaskHandle );
   xTaskCreate( vCliSendTask, "CliSendTask", 100, NULL, 1, &CliTaskHandle );
-  HAL_GPIO_WritePin(B_LED_GPIO_Port, B_LED_Pin, GPIO_PIN_SET);
 
   // Start receiving interrupts
   HAL_UART_Receive_IT(&huart2, (uint8_t*)&Received, 1);
@@ -228,28 +227,44 @@ void vLEDTask(void *pvParameters) {
 	vTaskDelete(NULL);
 };
 
+void set_rgb_led(char rgb){
+	switch(rgb){
+    case 'r':
+    	HAL_GPIO_TogglePin(R_LED_GPIO_Port, R_LED_Pin);
+      break;
+    case 'g':
+    	HAL_GPIO_TogglePin(G_LED_GPIO_Port, G_LED_Pin);
+      break;
+    case 'b':
+    	HAL_GPIO_TogglePin(B_LED_GPIO_Port, B_LED_Pin);
+      break;
+	}
+}
+
 void vBleSendTask( void *pvParameters ){
+	char Data[20] = {0};
 	while(1){
 		vTaskSuspend(NULL);
 		  memcpy(HC06_msg, HC06_rx_buffer, HC06_rx_counter);
 		  memset(HC06_rx_buffer, 0, HC06_RX_BUFFER_LENGTH);
 		  HC06_rx_counter = 0;
 
-		  char Data[20];
 		  sprintf((char*)Data, "HC06 (received): %s \n\r", HC06_msg);
+		  if (strlen(HC06_msg) == 1) set_rgb_led(HC06_msg[0]);
 		  memset(HC06_msg, 0, HC06_RX_BUFFER_LENGTH);
 		  HAL_UART_Transmit(&huart2, Data, strlen(Data), 100);
+		  memset(HC06_msg, 0, 20);
 	}
 	vTaskDelete(NULL);
 };
 
 void vCliSendTask( void *pvParameters ){
-	uint8_t Data[50] = {0};
-	uint8_t cmd[20] = {0};
+	char Data[50] = {0};
+	char cmd[20] = {0};
 	while(1){
 		vTaskSuspend(NULL);
 			rng_buf_get_buff(cmd);
-			sprintf((char*)Data, "Odebrana wiadomosc: %s \n\r", cmd);
+			sprintf(Data, "CLI (received): %s \n\r", cmd);
 			HAL_UART_Transmit(&huart2, Data, strlen(Data), 1000);
 			memset(cmd, 0, 20);
 			memset(Data, 0, 50);
